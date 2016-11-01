@@ -1,0 +1,122 @@
+--                                   Storage API
+ 
+function wrapAPI()
+
+local storagePath = ""
+local visibleFunc = {}
+
+local docstrings = setmetatable({}, {__mode = "kv"})
+local methodSep = ("="):rep(term.getSize())
+
+local function document(str)
+  return function(obj) docstrings[obj] = str; return obj end
+end
+
+
+visibleFunc.help = document[[
+wrapper.help() prints all documented available methods
+wrapper.help(wrapper.func) prints documentation for a particular method
+]](
+function (obj)
+  if obj then print(docstrings[obj]) else
+	  for funcName, func in pairs(visibleFunc) do
+		print(funcName)
+		print(methodSep)
+		print(docstrings[func])
+		print(methodSep)
+		io.read()
+	  end
+  end
+end)
+
+visibleFunc.getStoragePath = document[[Api's internal storagepath for tables]]( 
+function() return storagePath end)
+
+
+ 
+-- for table use
+visibleFunc.setStoragePath = document[[Run once to set the internal storage path]]( function(stringPath)
+	local name = stringPath;
+	if not pcall(function ()
+			name = fs.getName(shell.getRunningProgram())
+		  end) and not stringPath then
+		error('Must supply a stringPath for setStoragePath')
+	end
+	storagePath = "StorageContents/"..name;
+end)
+
+
+visibleFunc.createPaths = document[[
+Sets up a storage directory if one does not exist.                               
+Sets up a directory within the storage direc for the currently running program.  
+The following is a depiction of the folder structure if createPaths() is used    
+                                                                                  
+StorageContents                                                              
+   program name (using the API)                                         
+       objectType                                                   
+           objects (files)                                      
+-----------------------------                                                
+StorageContents                                                              
+   Easy Bake                                                            
+       furnaces                                                     
+           furnace1                                             
+                                                                                  
+                                                                                 
+Supply the name of the program that will use the API                             
+name = fs.getName(shell.getRunningProgram())                                     
+]]( function (name, ...)
+    if not(name) then
+        name = fs.getName(shell.getRunningProgram())
+    end
+        storagePath = "StorageContents/"..name
+        fs.makeDir(storagePath)
+    for _, v in ipairs(arg) do
+        print("Making  "..storagePath.."/"..v)
+        fs.makeDir(storagePath.."/"..v)
+    end
+end)
+ 
+ 
+visibleFunc.cache = document[[
+Stores the given table                                 
+The second parameter can be a string of the path, but  
+is not necessary, provided the function setStoragePath 
+has been run once already.                             
+]]( function(table_t, string_filePath)
+ 
+-- Determines a filepath
+    local filePath = string_filePath or
+    (storagePath.."/"..(table_t.address or ''))
+ 
+    local file = assert(fs.open(filePath, "w"), "Assertion Failed: Indeterminate filePath.")
+    file.write(textutils.serialize(table_t))
+    file.close()
+end)
+ 
+ 
+ 
+visibleFunc.fetch = document[[
+Retrieves the table from a specified filepath.                  
+The parameter can be a table or a string of the file path.            
+]]( function(filePath)
+ 
+-- Determines filepath
+    if type(filePath) == "string" then
+        filePath = filePath
+    elseif type(filePath) == "table" then
+		local tab = filePath
+        if #storagePath == 0 then setStoragePath() end
+        filePath = (storagePath.."/"..(tab.address or tostring(tab)))  
+    end
+   
+    local file = assert(fs.open(filePath, "r"), "Assertion Failed: Indeterminate filePath.")
+    content = file.readAll()
+    local t = textutils.unserialize(content)
+    file.close()
+    return t
+end)
+
+
+return visibleFunc
+ 
+end
